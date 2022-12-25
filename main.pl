@@ -6,8 +6,16 @@
  *
  * default(X) - a placeholder for a name for an unnamed variables
  * expression(X, Y) - X is an arithmetic expression (includes equations) that has variables Y
+ * equation(X, Y) - X is an arithmetic equation that has variables Y
  * signal(X, Y) - X is a signal modifier (private_input, public_input, intermediate, output)
  *                Y is the signal name
+*/
+
+/*
+ * In order to replace variables with corresponding ground terms,
+ * Variables get attributes representing their "name".
+ * The name should include the signal modifier and the signal name in the form signal(X, Y).
+ * Check not done here intentionally in order to make it general
  */
 
 named_var(Name - Var) :-
@@ -28,8 +36,8 @@ force_named_vars(Vars) :-
 	force_named_vars_(Vars, 0).
 
 /*
- * on the assumption the equation being passed is comprised only of operands and clpfd variables,
- * no need to worry of infinite recursion since A = (B #= C) throws an error (unifcation with terms is impossible with clpfd variables)
+ * On the assumption the equation being passed is comprised only of valid operands and clpfd variables,
+ * no need to worry of infinite recursion since A = (B #= C) throws an error when A is a clpfd var (unifcation with terms is impossible with clpfd variables)
  */
 
 named_expression(Var, expression(VarName, [VarName])) :-
@@ -53,8 +61,28 @@ named_expression(A * B, expression(C * D, Variables)) :-
 	named_expression(B, expression(D, Variables1)),
 	append(Variables0, Variables1, Variables).
 
-equations(NamedVariables, Equations) :-
+clpfd_equation(clpfd:(_ #= _)).
+unwrapped_equation(clpfd:(A #= B), A #= B).
+as_equation(expression(A #= B, Variables), equation(A #= B, Variables)).
+
+/*
+ * replaces every occurance of a variable in an equation of that variable with a corresponding name
+ */
+variable_equations(NamedVariables, Equations) :-
+	% Assign names to known variables 
 	maplist(named_var, NamedVariables),
-	pair_values(NamedVariables, Variables),
+
+	% Assign names to all other remaining variables
+	pairs_values(NamedVariables, Variables),
 	term_attvars(Variables, AllVariables),
-	forced_named_vars(AllVariables).
+	force_named_vars(AllVariables),
+
+	% Filter and format equation constraints
+	copy_term(AllVariables, AllVariables, Constraints),
+	include(clpfd_equation, Constraints, Equations0),
+	maplist(unwrapped_equation, Equations0, Equations1),
+
+	% Replace variables with ground terms
+	maplist(named_expression, Equations1, Equations2),
+	maplist(as_equation, Equations2, Equations).	
+	
