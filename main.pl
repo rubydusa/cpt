@@ -21,19 +21,19 @@
 named_var(Name - Var) :-
 	put_attr(Var, name, Name).
 
-force_named_var(Var, _) :-
+forced_named_var(Var, _) :-
 	get_attr(Var, name, _).
-force_named_var(Var, Default) :-
+forced_named_var(Var, Default) :-
 	\+ get_attr(Var, name, _),
 	put_attr(Var, name, Default).
 
-force_named_vars_([], _).
-force_named_vars_([Var | Rest], Default) :-
+forced_named_vars_([], _).
+forced_named_vars_([Var | Rest], Default) :-
 	NextDefault is Default + 1,
-	force_named_var(Var, default(Default)),
-	force_named_vars_(Rest, NextDefault).
-force_named_vars(Vars) :-
-	force_named_vars_(Vars, 0).
+	forced_named_var(Var, default(Default)),
+	forced_named_vars_(Rest, NextDefault).
+forced_named_vars(Vars) :-
+	forced_named_vars_(Vars, 0).
 
 /*
  * On the assumption the equation being passed is comprised only of valid operands and clpfd variables,
@@ -75,7 +75,7 @@ variable_equations(NamedVariables, Equations) :-
 	% Assign names to all other remaining variables
 	pairs_values(NamedVariables, Variables),
 	term_attvars(Variables, AllVariables),
-	force_named_vars(AllVariables),
+	forced_named_vars(AllVariables),
 
 	% Filter and format equation constraints
 	copy_term(AllVariables, AllVariables, Constraints),
