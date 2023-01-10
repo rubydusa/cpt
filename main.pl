@@ -35,35 +35,48 @@ forced_named_vars_([Var | Rest], Default) :-
 forced_named_vars(Vars) :-
 	forced_named_vars_(Vars, 0).
 
-/*
- * On the assumption the equation being passed is comprised only of valid operands and clpfd variables,
- * no need to worry of infinite recursion since A = (B #= C) throws an error when A is a clpfd var (unifcation with terms is impossible with clpfd variables)
- */
+ast(Expr, t(LeafType, Name, Args)) :-
+	catch(
+	      (
+	       LeafType=op,
+	       compound_name_arguments(Expr, Name, Args0),
+	       maplist(ast, Args0, Args)
+	      ),
+	      Error,
+	      ast_error_(Expr, LeafType, Name, Args, Error)
+	     ).
 
-named_expression(Var, expression(VarName, [VarName])) :-
+ast_error_(Expr, non_op, variable, [Expr], error(instantiation_error, _)).
+ast_error_(Expr, non_op, atom, [Expr], error(type_error(compound, Expr), _)).
+
+% safe operations are always permitable
+safe_operation(+).
+safe_operation(*).
+safe_operation(-).
+
+named_expression_(t(non_op, variable, [Var]), expression(t(non_op, atom, [VarName]), []), _) :-
 	get_attr(Var, name, VarName).
-named_expression(Var, expression(Var, [])) :-
-	integer(Var).
-named_expression(A #= B, expression(C #= D, Variables)) :-
-	named_expression(A, expression(C, Variables0)),
-	named_expression(B, expression(D, Variables1)),
-	append(Variables0, Variables1, Variables).
-named_expression(A + B, expression(C + D, Variables)) :-
-	named_expression(A, expression(C, Variables0)),
-	named_expression(B, expression(D, Variables1)),
-	append(Variables0, Variables1, Variables).
-named_expression(A - B, expression(C - D, Variables)) :-
-	named_expression(A, expression(C, Variables0)),
-	named_expression(B, expression(D, Variables1)),
-	append(Variables0, Variables1, Variables).
-named_expression(A * B, expression(C * D, Variables)) :-
-	named_expression(A, expression(C, Variables0)),
-	named_expression(B, expression(D, Variables1)),
-	append(Variables0, Variables1, Variables).
+named_expression_(t(non_op, atom, [Int]), expression(t(non_op, atom, [Int]), []), _) :-
+	integer(Int).
+named_expression_(t(op, #=, [RHS0, LHS0]), expression(t(op, #=, [RHS, LHS]), Vars), root) :-
+	named_expression_(RHS0, expression(RHS, RHSVars), non_root),
+	named_expression_(LHS0, expression(LHS, LHSVars), non_root),
+	append(RHSVars, LHSVars, Vars).
+named_expression_(t(op, Op, [RHS0, LHS0]), expression(t(op, Op, [RHS, LHS]), Vars), non_root) :-
+	safe_operation(Op),
+	named_expression_(RHS0, expression(RHS, RHSVars), non_root),
+	named_expression_(LHS0, expression(LHS, LHSVars), non_root),
+	append(RHSVars, LHSVars, Vars).
 
+named_expression(Tree, ExpressionTree) :-
+	named_expression_(Tree, ExpressionTree, root).
+
+/*
+ * helpers
+ */
+clpfd_constraint(clpfd:(_)).
 clpfd_equation(clpfd:(_ #= _)).
 unwrapped_equation(clpfd:(A #= B), A #= B).
-as_equation(expression(A #= B, Variables), equation(A #= B, Variables)).
 
 /*
  * replaces every occurance of a variable in an equation of that variable with a corresponding name
@@ -79,10 +92,11 @@ variable_equations(NamedVariables, Equations) :-
 
 	% Filter and format equation constraints
 	copy_term(AllVariables, AllVariables, Constraints),
-	include(clpfd_equation, Constraints, Equations0),
-	maplist(unwrapped_equation, Equations0, Equations1),
+	include(clpfd_constraint, Constraints, CLPFDConstraints),
+	maplist(clpfd_equation, CLPFDConstraints),
+	maplist(unwrapped_equation, CLPFDConstraints, Equations0),
 
-	% Replace variables with ground terms
-	maplist(named_expression, Equations1, Equations2),
-	maplist(as_equation, Equations2, Equations).	
+	maplist(ast, Equations0, Equations1),
+	maplist(named_expression, Equations1, Equations).
+
 	

@@ -6,6 +6,9 @@ Users are able to write constraints in a declerative way and the transpiler will
 Note that not all configurations of constraints can be translated into arithmetic circuits.
 
 Features:
+- [ ] Core Features
+- [ ] Partial Support for equations with division
+- [ ] Attempt to factor polynomial constraints into intermediate signals
 - [ ] Inequality constraints
 - [ ] Range constraints
 - [ ] Use of custom templates within generated template
